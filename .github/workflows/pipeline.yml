@@ -1,0 +1,78 @@
+name: Visit With Us - Tourism MLOps Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  register-dataset:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install project dependencies
+        run: pip install -r requirements-ci.txt
+      - name: Validate and register dataset
+        run: python tourism_project/model_building/data_register.py
+
+  prepare-data:
+    needs: register-dataset
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install project dependencies
+        run: pip install -r requirements-ci.txt
+      - name: Prepare training and testing data
+        run: python tourism_project/model_building/prep.py
+      - name: Share train/test data with the next job
+        uses: actions/upload-artifact@v4
+        with:
+          name: tourism-data-splits
+          path: |
+            tourism_project/Xtrain.csv
+            tourism_project/Xtest.csv
+            tourism_project/ytrain.csv
+            tourism_project/ytest.csv
+          if-no-files-found: error
+          retention-days: 1
+
+  train-and-register-model:
+    needs: prepare-data
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install project dependencies
+        run: pip install -r requirements-ci.txt
+      - name: Download train/test artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tourism-data-splits
+          path: tourism_project
+      - name: Train, tune and evaluate model
+        run: python tourism_project/model_building/train.py
+      - name: Commit updated model to main
+        if: github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[skip ci]')
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tourism_project/deployment/best_model.pkl tourism_project/deployment/training_results.json tourism_project/deployment/grid_search_results.csv
+          git diff --cached --quiet || (git commit -m "Update trained tourism model [skip ci]" && git push)

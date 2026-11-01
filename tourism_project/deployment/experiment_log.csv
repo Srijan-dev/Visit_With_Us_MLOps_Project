@@ -1,0 +1,2 @@
+classifier__max_depth,classifier__min_samples_leaf,classifier__n_estimators,accuracy,precision,recall,f1_score,roc_auc,best_cv_f1
+12,3,150,0.8450363196125908,0.6054421768707483,0.559748427672956,0.5816993464052288,0.8912430577164249,0.5974497195487435
